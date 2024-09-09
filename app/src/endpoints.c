@@ -237,6 +237,28 @@ int zmk_endpoints_send_mouse_report() {
 }
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
 
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+int zmk_endpoints_send_rpc_report() {
+    switch (current_instance.transport) {
+    case ZMK_TRANSPORT_USB: {
+#if IS_ENABLED(CONFIG_ZMK_USB)
+        int err = zmk_usb_hid_send_rpc_report();
+        if (err) {
+            LOG_ERR("FAILED TO SEND OVER USB: %d", err);
+        }
+        return err;
+#else
+        LOG_ERR("USB endpoint is not supported");
+        return -ENOTSUP;
+#endif /* IS_ENABLED(CONFIG_ZMK_USB) */
+    }
+    }
+
+    LOG_ERR("Unhandled endpoint transport %d", current_instance.transport);
+    return -ENOTSUP;
+}
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
 #if IS_ENABLED(CONFIG_SETTINGS)
 
 static int endpoints_handle_set(const char *name, size_t len, settings_read_cb read_cb,

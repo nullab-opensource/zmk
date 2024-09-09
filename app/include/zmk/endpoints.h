@@ -74,4 +74,8 @@ int zmk_endpoints_send_report(uint16_t usage_page);
 int zmk_endpoints_send_mouse_report();
 #endif // IS_ENABLE(CONFIG_ZMK_MOUSE)
 
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+int zmk_endpoints_send_rpc_report();
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
 void zmk_endpoints_clear_current(void);

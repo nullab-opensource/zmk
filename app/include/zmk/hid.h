@@ -76,6 +76,13 @@
 #define ZMK_HID_REPORT_ID_LEDS 0x01
 #define ZMK_HID_REPORT_ID_CONSUMER 0x02
 #define ZMK_HID_REPORT_ID_MOUSE 0x03
+#define ZMK_HID_REPORT_ID_RPC (CONFIG_ZMK_STUDIO_TRANSPORT_HID_REPORT_ID)
+
+#define ZMK_HID_RPC_USAGE (CONFIG_ZMK_STUDIO_TRANSPORT_HID_USAGE_PAGE)
+#define ZMK_HID_RPC_REPORT_COUNT (CONFIG_HID_INTERRUPT_EP_MPS - 1)
+
+#define HID_USAGE_PAGE_VENDOR_DEFINED(page)                                                        \
+    HID_ITEM(HID_ITEM_TAG_USAGE_PAGE, HID_ITEM_TYPE_GLOBAL, 2), page, 0xFF
 
 static const uint8_t zmk_hid_report_desc[] = {
     HID_USAGE_PAGE(HID_USAGE_GEN_DESKTOP),
@@ -193,6 +200,23 @@ static const uint8_t zmk_hid_report_desc[] = {
     HID_END_COLLECTION,
     HID_END_COLLECTION,
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+    HID_USAGE_PAGE_VENDOR_DEFINED(ZMK_HID_RPC_USAGE),
+    HID_USAGE(0x01),
+    HID_COLLECTION(HID_COLLECTION_APPLICATION),
+    HID_LOGICAL_MIN8(0x00),
+    HID_LOGICAL_MAX8(0xFF),
+    HID_REPORT_SIZE(8),
+    HID_REPORT_COUNT(ZMK_HID_RPC_REPORT_COUNT),
+    HID_REPORT_ID(ZMK_HID_REPORT_ID_RPC),
+    HID_USAGE(0x01),
+    HID_INPUT(ZMK_HID_MAIN_VAL_DATA | ZMK_HID_MAIN_VAL_VAR | ZMK_HID_MAIN_VAL_ABS),
+    HID_REPORT_ID(ZMK_HID_REPORT_ID_RPC),
+    HID_USAGE(0x01),
+    HID_OUTPUT(ZMK_HID_MAIN_VAL_DATA | ZMK_HID_MAIN_VAL_VAR | ZMK_HID_MAIN_VAL_ABS),
+    HID_END_COLLECTION,
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 };
 
 #if IS_ENABLED(CONFIG_ZMK_USB_BOOT)
@@ -270,6 +294,15 @@ struct zmk_hid_mouse_report {
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
 
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
+struct zmk_hid_rpc_report {
+    uint8_t report_id;
+    uint8_t data[ZMK_HID_RPC_REPORT_COUNT];
+} __packed;
+
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
 zmk_mod_flags_t zmk_hid_get_explicit_mods(void);
 int zmk_hid_register_mod(zmk_mod_t modifier);
 int zmk_hid_unregister_mod(zmk_mod_t modifier);
@@ -314,3 +347,7 @@ zmk_hid_boot_report_t *zmk_hid_get_boot_report();
 #if IS_ENABLED(CONFIG_ZMK_MOUSE)
 struct zmk_hid_mouse_report *zmk_hid_get_mouse_report();
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+struct zmk_hid_rpc_report *zmk_hid_get_rpc_report();
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)

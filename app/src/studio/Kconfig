@@ -78,6 +78,23 @@ config ZMK_STUDIO_TRANSPORT_BLE_PREF_LATENCY
       When the studio UI is connected, a lower latency can be requested in order
       to make the interactions between keyboard and studio faster.
 
+config ZMK_STUDIO_TRANSPORT_HID
+    bool "HID"
+    select RING_BUFFER
+    depends on !ZMK_STUDIO_TRANSPORT_UART
+
+if ZMK_STUDIO_TRANSPORT_HID
+
+config ZMK_STUDIO_TRANSPORT_HID_USAGE_PAGE
+	hex "HID vendor-defined usage page to be used for ZMK Studio"
+	default 0xFE
+
+config ZMK_STUDIO_TRANSPORT_HID_REPORT_ID
+	hex "HID report ID to be used for ZMK Studio"
+	default 0xFE
+
+endif # ZMK_STUDIO_TRANSPORT_HID
+
 endmenu
 
 config ZMK_STUDIO_RPC_THREAD_STACK_SIZE

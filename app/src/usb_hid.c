@@ -16,6 +16,9 @@
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
 #include <zmk/hid_indicators.h>
 #endif // IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+#include <zmk/hid_rpc.h>
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 #include <zmk/event_manager.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -109,6 +112,18 @@ static int set_report_cb(const struct device *dev, struct usb_setup_packet *setu
         }
         break;
 #endif // IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+    case ZMK_HID_REPORT_ID_RPC:
+        if (*len > sizeof(struct zmk_hid_rpc_report)) {
+            LOG_ERR("RPC set report is malformed: length=%d", *len);
+            return -EINVAL;
+        } else {
+            struct zmk_hid_rpc_report *report = (struct zmk_hid_rpc_report *)*data;
+            zmk_hid_rpc_process_report(
+                report->data, *len - offsetof(struct zmk_hid_rpc_report, data), ZMK_TRANSPORT_USB);
+        }
+        break;
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
     default:
         LOG_ERR("Invalid report ID %d requested", setup->wValue & HID_GET_REPORT_ID_MASK);
         return -EINVAL;
@@ -176,6 +191,13 @@ int zmk_usb_hid_send_mouse_report() {
     return zmk_usb_hid_send_report((uint8_t *)report, sizeof(*report));
 }
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+int zmk_usb_hid_send_rpc_report() {
+    struct zmk_hid_rpc_report *report = zmk_hid_get_rpc_report();
+    return zmk_usb_hid_send_report((uint8_t *)report, sizeof(*report));
+}
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 
 static int zmk_usb_hid_init(void) {
     hid_dev = device_get_binding("HID_0");

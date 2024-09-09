@@ -32,6 +32,12 @@ static struct zmk_hid_mouse_report mouse_report = {.report_id = ZMK_HID_REPORT_I
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
 
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
+static struct zmk_hid_rpc_report rpc_report = {.report_id = ZMK_HID_REPORT_ID_RPC, .data = {0}};
+
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
 // Keep track of how often a modifier was pressed.
 // Only release the modifier if the count is 0.
 static int explicit_modifier_counts[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -444,3 +450,9 @@ struct zmk_hid_consumer_report *zmk_hid_get_consumer_report(void) { return &cons
 struct zmk_hid_mouse_report *zmk_hid_get_mouse_report(void) { return &mouse_report; }
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
+struct zmk_hid_rpc_report *zmk_hid_get_rpc_report(void) { return &rpc_report; }
+
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
