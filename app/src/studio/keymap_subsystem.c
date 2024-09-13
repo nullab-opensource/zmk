@@ -498,10 +498,6 @@ zmk_studio_Response set_layer_props(const zmk_studio_Request *req) {
     zmk_keymap_SetLayerPropsResponse resp =
         zmk_keymap_SetLayerPropsResponse_SET_LAYER_PROPS_RESP_OK;
 
-    if (strlen(set_req->name) <= 0) {
-        return KEYMAP_RESPONSE(set_layer_props, resp);
-    }
-
     int ret = zmk_keymap_set_layer_name(set_req->layer_id, set_req->name, strlen(set_req->name));
 
     if (ret >= 0) {
