@@ -73,6 +73,8 @@ RING_BUF_DECLARE(rpc_rx_buf, CONFIG_ZMK_STUDIO_RPC_RX_BUF_SIZE);
 static K_SEM_DEFINE(rpc_rx_sem, 0, 1);
 
 static enum studio_framing_state rpc_framing_state;
+static uint32_t rpc_bytes_awaiting = 0;
+static uint32_t rpc_bytes_read = 0;
 
 static K_MUTEX_DEFINE(rpc_transport_mutex);
 static struct zmk_rpc_transport *selected_transport;
@@ -83,6 +85,13 @@ void zmk_rpc_rx_notify(void) { k_sem_give(&rpc_rx_sem); }
 
 static bool rpc_read_cb(pb_istream_t *stream, uint8_t *buf, size_t count) {
     uint32_t write_offset = 0;
+
+    if (rpc_framing_state == FRAMING_STATE_EOF) {
+        stream->bytes_left = 0;
+        return false;
+    }
+
+    rpc_bytes_awaiting += count;
 
     do {
         uint8_t *buffer;
@@ -101,7 +110,9 @@ static bool rpc_read_cb(pb_istream_t *stream, uint8_t *buf, size_t count) {
         ring_buf_get_finish(&rpc_rx_buf, len);
     } while (write_offset < count && rpc_framing_state != FRAMING_STATE_EOF);
 
-    if (rpc_framing_state == FRAMING_STATE_EOF) {
+    rpc_bytes_read += write_offset;
+
+    if (rpc_framing_state == FRAMING_STATE_EOF && rpc_bytes_awaiting > rpc_bytes_read) {
         stream->bytes_left = 0;
         return false;
     } else {
@@ -110,6 +121,8 @@ static bool rpc_read_cb(pb_istream_t *stream, uint8_t *buf, size_t count) {
 }
 
 static pb_istream_t pb_istream_for_rx_ring_buf() {
+    rpc_bytes_awaiting = 0;
+    rpc_bytes_read = 0;
     pb_istream_t stream = {&rpc_read_cb, NULL, SIZE_MAX};
     return stream;
 }
