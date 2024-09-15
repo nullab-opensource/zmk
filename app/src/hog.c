@@ -224,6 +224,28 @@ K_THREAD_STACK_DEFINE(hog_q_stack, CONFIG_ZMK_BLE_THREAD_STACK_SIZE);
 
 struct k_work_q hog_work_q;
 
+static const struct bt_gatt_attr *find_gatt_attr_for(const bt_gatt_attr_read_func_t read_func) {
+    for (int i = 0; i < hog_svc.attr_count - 1; i++) {
+        const struct bt_gatt_attr *chrc = &hog_svc.attrs[i];
+        if (chrc->uuid->type != BT_UUID_TYPE_16 ||
+            ((const struct bt_uuid_16 *)chrc->uuid)->val != BT_UUID_GATT_CHRC_VAL) {
+            continue;
+        }
+
+        const struct bt_gatt_attr *attr = &hog_svc.attrs[i + 1];
+        if (attr->uuid->type != BT_UUID_TYPE_16 ||
+            ((const struct bt_uuid_16 *)attr->uuid)->val != BT_UUID_HIDS_REPORT_VAL) {
+            continue;
+        }
+
+        if (attr->read == read_func) {
+            return attr;
+        }
+    }
+
+    return NULL;
+}
+
 K_MSGQ_DEFINE(zmk_hog_keyboard_msgq, sizeof(struct zmk_hid_keyboard_report_body),
               CONFIG_ZMK_BLE_KEYBOARD_REPORT_QUEUE_SIZE, 4);
 
@@ -236,8 +258,14 @@ void send_keyboard_report_callback(struct k_work *work) {
             return;
         }
 
+        const struct bt_gatt_attr *attr = find_gatt_attr_for(read_hids_input_report);
+        if (attr == NULL) {
+            LOG_WRN("Failed to find GATT attribute for keyboard report");
+            return;
+        }
+
         struct bt_gatt_notify_params notify_params = {
-            .attr = &hog_svc.attrs[5],
+            .attr = attr,
             .data = &report,
             .len = sizeof(report),
         };
@@ -288,8 +316,14 @@ void send_consumer_report_callback(struct k_work *work) {
             return;
         }
 
+        const struct bt_gatt_attr *attr = find_gatt_attr_for(read_hids_consumer_input_report);
+        if (attr == NULL) {
+            LOG_WRN("Failed to find GATT attribute for consumer report");
+            return;
+        }
+
         struct bt_gatt_notify_params notify_params = {
-            .attr = &hog_svc.attrs[9],
+            .attr = attr,
             .data = &report,
             .len = sizeof(report),
         };
@@ -341,8 +375,14 @@ void send_mouse_report_callback(struct k_work *work) {
             return;
         }
 
+        const struct bt_gatt_attr *attr = find_gatt_attr_for(read_hids_mouse_input_report);
+        if (attr == NULL) {
+            LOG_WRN("Failed to find GATT attribute for mouse report");
+            return;
+        }
+
         struct bt_gatt_notify_params notify_params = {
-            .attr = &hog_svc.attrs[13],
+            .attr = attr,
             .data = &report,
             .len = sizeof(report),
         };
