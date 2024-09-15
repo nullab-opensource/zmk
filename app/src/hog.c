@@ -21,6 +21,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #if IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
 #include <zmk/hid_indicators.h>
 #endif // IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+#include <zmk/hid_rpc.h>
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 
 enum {
     HIDS_REMOTE_WAKE = BIT(0),
@@ -77,6 +80,20 @@ static struct hids_report mouse_input = {
 };
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
+static struct hids_report rpc_input = {
+    .id = ZMK_HID_REPORT_ID_RPC,
+    .type = HIDS_INPUT,
+};
+
+static struct hids_report rpc_output = {
+    .id = ZMK_HID_REPORT_ID_RPC,
+    .type = HIDS_OUTPUT,
+};
+
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 
 static bool host_requests_notification = false;
 static uint8_t ctrl_point;
@@ -152,6 +169,30 @@ static ssize_t read_hids_mouse_input_report(struct bt_conn *conn, const struct b
 }
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
 
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+static ssize_t read_hids_rpc_report(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                                    void *buf, uint16_t len, uint16_t offset) {
+    uint8_t *report_body = zmk_hid_get_rpc_report()->data;
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, report_body, ZMK_HID_RPC_REPORT_COUNT);
+}
+
+static ssize_t write_hids_rpc_report(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                                     const void *buf, uint16_t len, uint16_t offset,
+                                     uint8_t flags) {
+    if (offset != 0) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+    }
+    if (len > ZMK_HID_RPC_REPORT_COUNT) {
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+    }
+
+    uint8_t *report = (uint8_t *)buf;
+    zmk_hid_rpc_process_report(report, len, ZMK_TRANSPORT_BLE);
+
+    return len;
+}
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
 // static ssize_t write_proto_mode(struct bt_conn *conn,
 //                                 const struct bt_gatt_attr *attr,
 //                                 const void *buf, uint16_t len, uint16_t offset,
@@ -216,6 +257,21 @@ BT_GATT_SERVICE_DEFINE(
     BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ_ENCRYPT, read_hids_report_ref,
                        NULL, &led_indicators),
 #endif // IS_ENABLED(CONFIG_ZMK_HID_INDICATORS)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                           BT_GATT_PERM_READ_ENCRYPT, read_hids_rpc_report, NULL, NULL),
+    BT_GATT_CCC(input_ccc_changed, BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_WRITE_ENCRYPT),
+    BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ_ENCRYPT, read_hids_report_ref,
+                       NULL, &rpc_input),
+
+    BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_REPORT,
+                           BT_GATT_CHRC_READ | BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+                           BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_WRITE_ENCRYPT, NULL,
+                           write_hids_rpc_report, NULL),
+    BT_GATT_DESCRIPTOR(BT_UUID_HIDS_REPORT_REF, BT_GATT_PERM_READ_ENCRYPT, read_hids_report_ref,
+                       NULL, &rpc_output),
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 
     BT_GATT_CHARACTERISTIC(BT_UUID_HIDS_CTRL_POINT, BT_GATT_CHRC_WRITE_WITHOUT_RESP,
                            BT_GATT_PERM_WRITE, NULL, write_ctrl_point, &ctrl_point));
@@ -422,6 +478,66 @@ int zmk_hog_send_mouse_report(struct zmk_hid_mouse_report_body *report) {
 };
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
+
+K_MSGQ_DEFINE(zmk_hog_rpc_msgq, ZMK_HID_RPC_REPORT_COUNT, CONFIG_ZMK_BLE_RPC_REPORT_QUEUE_SIZE, 4);
+
+void send_rpc_report_callback(struct k_work *work) {
+    uint8_t report[ZMK_HID_RPC_REPORT_COUNT];
+    while (k_msgq_get(&zmk_hog_rpc_msgq, report, K_NO_WAIT) == 0) {
+        struct bt_conn *conn = zmk_ble_active_profile_conn();
+        if (conn == NULL) {
+            return;
+        }
+
+        const struct bt_gatt_attr *attr = find_gatt_attr_for(read_hids_rpc_report);
+        if (attr == NULL) {
+            LOG_WRN("Failed to find GATT attribute for RPC report");
+            return;
+        }
+
+        struct bt_gatt_notify_params notify_params = {
+            .attr = attr,
+            .data = report,
+            .len = sizeof(report),
+        };
+
+        int err = bt_gatt_notify_cb(conn, &notify_params);
+        if (err == -EPERM) {
+            bt_conn_set_security(conn, BT_SECURITY_L2);
+        } else if (err) {
+            LOG_DBG("Error notifying %d", err);
+        }
+
+        bt_conn_unref(conn);
+    }
+}
+
+K_WORK_DEFINE(hog_rpc_work, send_rpc_report_callback);
+
+int zmk_hog_send_rpc_report(uint8_t *data) {
+    int err = k_msgq_put(&zmk_hog_rpc_msgq, data, K_MSEC(100));
+    if (err) {
+        switch (err) {
+        case -EAGAIN: {
+            LOG_WRN("RPC message queue full, popping first message and queueing again");
+            uint8_t discarded_report[ZMK_HID_RPC_REPORT_COUNT];
+            k_msgq_get(&zmk_hog_rpc_msgq, discarded_report, K_NO_WAIT);
+            return zmk_hog_send_rpc_report(data);
+        }
+        default:
+            LOG_WRN("Failed to queue RPC report to send (%d)", err);
+            return err;
+        }
+    }
+
+    k_work_submit_to_queue(&hog_work_q, &hog_rpc_work);
+
+    return 0;
+}
+
+#endif // IS_ENABLED(CONFIG_ZMK_STUDIO_TRANSPORT_HID)
 
 static int zmk_hog_init(void) {
     static const struct k_work_queue_config queue_config = {.name = "HID Over GATT Send Work"};

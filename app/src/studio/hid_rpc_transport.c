@@ -17,6 +17,7 @@
 LOG_MODULE_DECLARE(zmk_studio, CONFIG_ZMK_STUDIO_LOG_LEVEL);
 
 static bool handling_hid_rx = false;
+static bool handling_hog_rx = false;
 
 static int hid_start_rx(void) {
     handling_hid_rx = true;
@@ -25,6 +26,16 @@ static int hid_start_rx(void) {
 
 static int hid_stop_rx(void) {
     handling_hid_rx = false;
+    return 0;
+}
+
+static int hog_start_rx(void) {
+    handling_hog_rx = true;
+    return 0;
+}
+
+static int hog_stop_rx(void) {
+    handling_hog_rx = false;
     return 0;
 }
 
@@ -57,6 +68,9 @@ static void hid_tx_notify(struct ring_buf *buf, size_t added, bool msg_done, voi
 ZMK_RPC_TRANSPORT(hid, ZMK_TRANSPORT_USB, hid_start_rx, hid_stop_rx, hid_tx_user_data,
                   hid_tx_notify);
 
+ZMK_RPC_TRANSPORT(hog, ZMK_TRANSPORT_BLE, hog_start_rx, hog_stop_rx, hid_tx_user_data,
+                  hid_tx_notify);
+
 void zmk_hid_rpc_process_report(uint8_t *data, size_t len, enum zmk_transport transport) {
     struct ring_buf *buf = zmk_rpc_get_rx_buf();
     uint32_t copied = 0;
@@ -64,6 +78,8 @@ void zmk_hid_rpc_process_report(uint8_t *data, size_t len, enum zmk_transport tr
     uint32_t claim_len;
 
     if (transport == ZMK_TRANSPORT_USB && !handling_hid_rx) {
+        return;
+    } else if (transport == ZMK_TRANSPORT_BLE && !handling_hog_rx) {
         return;
     }
 

@@ -252,6 +252,20 @@ int zmk_endpoints_send_rpc_report() {
         return -ENOTSUP;
 #endif /* IS_ENABLED(CONFIG_ZMK_USB) */
     }
+
+    case ZMK_TRANSPORT_BLE: {
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+        struct zmk_hid_rpc_report *rpc_report = zmk_hid_get_rpc_report();
+        int err = zmk_hog_send_rpc_report(rpc_report->data);
+        if (err) {
+            LOG_ERR("FAILED TO SEND OVER HOG: %d", err);
+        }
+        return err;
+#else
+        LOG_ERR("BLE HOG endpoint is not supported");
+        return -ENOTSUP;
+#endif /* IS_ENABLED(CONFIG_ZMK_BLE) */
+    }
     }
 
     LOG_ERR("Unhandled endpoint transport %d", current_instance.transport);
