@@ -83,7 +83,7 @@ static bool encode_value_description(pb_ostream_t *stream, const pb_field_t *fie
         zmk_behaviors_BehaviorParameterValueDescription desc =
             zmk_behaviors_BehaviorParameterValueDescription_init_zero;
         desc.name.funcs.encode = encode_value_description_name;
-        desc.name.arg = val;
+        desc.name.arg = (void *)val;
 
         switch (val->type) {
         case BEHAVIOR_PARAMETER_VALUE_TYPE_VALUE:
@@ -137,9 +137,9 @@ static bool encode_metadata_sets(pb_ostream_t *stream, const pb_field_t *field, 
         zmk_behaviors_BehaviorBindingParametersSet msg =
             zmk_behaviors_BehaviorBindingParametersSet_init_zero;
         msg.param1.funcs.encode = encode_value_description;
-        msg.param1.arg = state;
+        msg.param1.arg = (void *)state;
         msg.param2.funcs.encode = encode_value_description;
-        msg.param2.arg = state;
+        msg.param2.arg = (void *)state;
         ret = pb_encode_submessage(stream, &zmk_behaviors_BehaviorBindingParametersSet_msg, &msg);
         if (!ret) {
             LOG_WRN("Failed to encode submessage for set %d", i);
@@ -196,13 +196,13 @@ zmk_studio_Response get_behavior_details(const zmk_studio_Request *req) {
         zmk_behaviors_GetBehaviorDetailsResponse_init_zero;
     resp.id = behavior_id;
     resp.display_name.funcs.encode = encode_behavior_name;
-    resp.display_name.arg = zbm;
+    resp.display_name.arg = (void *)zbm;
 
     state.sets = desc.sets;
     state.sets_len = desc.sets_len;
 
     resp.metadata.funcs.encode = encode_metadata_sets;
-    resp.metadata.arg = &state;
+    resp.metadata.arg = (void *)&state;
 
     return BEHAVIOR_RESPONSE(get_behavior_details, resp);
 }
